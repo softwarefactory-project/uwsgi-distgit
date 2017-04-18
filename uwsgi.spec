@@ -10,104 +10,10 @@
 %{!?_httpd_apxs: %{expand: %%global _httpd_apxs %%{_sbindir}/apxs}}
 %{!?_httpd_moddir:    %{expand: %%global _httpd_moddir    %%{_libdir}/httpd/modules}}
 
-# This is primarily built for fedora, make it easy right now
-%if 0%{?fedora}
-%bcond_without systemd
-%bcond_without go
-%bcond_without python3
-%bcond_without tornado3
-%{!?python3_pkgversion: %global python3_pkgversion 3}
-%bcond_without ruby19
-%bcond_without tuntap
-%bcond_without zeromq
-%bcond_without greenlet
-%bcond_without perl
-%bcond_without glusterfs
-%bcond_without java
-#mono
-%ifnarch %{mono_arches}
-%bcond_with mono
-%else
-%bcond_without mono
-%endif
-# mongodblibs
-# mongodb is little endian only
-%ifnarch ppc ppc64 s390 s390x
-%bcond_without mongodblibs
-%else
-%bcond_with mongodblibs
-%endif
-# v8
-%ifnarch %{ix86} x86_64 %{arm}
-%bcond_with v8
-%else
-%bcond_without v8
-%endif
-#mongodblibs dependency
-%if %{without mongodblibs}
-%bcond_with gridfs
-%else
-%bcond_without gridfs
-%endif
-#Fedora endif
-%endif
-
-# Conditionally disable some things in epel6
-%if 0%{?rhel} == 6
-# el6 ppc64 doesn't hava java
-%ifarch ppc64
 %bcond_with java
-%else
-%bcond_without java
-%endif
-# el6 doesn't ship with systemd
 %bcond_with systemd
-# el6 doesn't have go
-%bcond_with go
-# el6 doesn't have python3
 %bcond_with python3
-%bcond_with tornado3
-# el6 ships with ruby 1.8 but fiberloop/rbthreads needs 1.9
-%bcond_with ruby19
-# el6 doesn't have perl-PSGI
-# el6 does have perl-Coro
-%bcond_with perl
-# this fails in el not sure why
-%bcond_with gridfs
-%bcond_with tuntap
-%bcond_with mongodblibs
-%global manual_py_compile 0
-%else
 %global manual_py_compile 1
-%endif
-
-# Conditionally enable/disable some things in epel7
-%if 0%{?rhel} == 7
-# el7 does have java
-%bcond_without java
-# el7 does have systemd
-%bcond_without systemd
-# el7 does have python3
-%bcond_without python3
-%{!?python3_pkgversion: %global python3_pkgversion 34}
-# ...but no python3-tornado yet
-%bcond_with tornado3
-# el7 doesn't have zeromq
-%bcond_with zeromq
-# el7 doesn't have greenlet
-%bcond_with greenlet
-# el7 does have perl-PSGI
-# el7 doesn't have perl-Coro
-%bcond_without perl
-# el7 can now build glusterfs but only on x86_64
-%ifnarch x86_64
-%bcond_with glusterfs
-%else
-%bcond_without glusterfs
-%endif
-# this fails in el7 not sure why
-%bcond_with gridfs
-%endif
 
 # Turn off byte compilation so it doesn't try
 # to auto-optimize the code in /usr/src/uwsgi
@@ -115,9 +21,10 @@
 %global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
 %endif
 
+
 Name:           uwsgi
 Version:        %{majornumber}.%{minornumber}.%{releasenumber}
-Release:        6%{?dist}
+Release:        4%{?dist}
 Summary:        Fast, self-healing, application container server
 Group:          System Environment/Daemons
 License:        GPLv2 with exceptions
@@ -136,7 +43,7 @@ Patch3:         uwsgi_fix_lua.patch
 # https://github.com/unbit/uwsgi/issues/882
 Patch5:         uwsgi_fix_mongodb.patch
 Patch6:         uwsgi_v8-314_compatibility.patch
-BuildRequires:  curl,  python2-devel, libxml2-devel, libuuid-devel, jansson-devel
+BuildRequires:  gcc, gcc-c++, curl,  python2-devel, libxml2-devel, libuuid-devel, jansson-devel
 BuildRequires:  libyaml-devel, ruby-devel
 %if %{with python3}
 BuildRequires:  python%{python3_pkgversion}-devel
@@ -157,7 +64,7 @@ BuildRequires:  openssl-devel
 BuildRequires:  bzip2-devel, gmp-devel, pam-devel
 BuildRequires:  java-devel, sqlite-devel, libcap-devel
 BuildRequires:  httpd-devel, tcp_wrappers-devel, libcurl-devel
-BuildRequires:  gloox-devel, libstdc++-devel
+BuildRequires:  libstdc++-devel
 BuildRequires:  GeoIP-devel, libevent-devel, zlib-devel
 BuildRequires:  openldap-devel, boost-devel
 BuildRequires:  libattr-devel, libxslt-devel
@@ -316,14 +223,6 @@ Requires: %{name}-plugin-common = %{version}-%{release}, libcurl
 
 %description -n %{name}-alarm-curl
 This package contains the alarm_curl alarm plugin for uWSGI
-
-%package -n %{name}-alarm-xmpp
-Summary:  uWSGI - Curl alarm plugin
-Group:    System Environment/Daemons
-Requires: %{name}-plugin-common = %{version}-%{release}, gloox
-
-%description -n %{name}-alarm-xmpp
-This package contains the alarm_xmpp alarm plugin for uWSGI
 
 # Transformations
 
@@ -577,14 +476,6 @@ Requires: %{name}-plugin-common = %{version}-%{release}
 %description -n %{name}-plugin-dummy
 This package contains the dummy plugin for uWSGI
 
-%package -n %{name}-plugin-fiber
-Summary:  uWSGI - Plugin for Ruby Fiber support
-Group:    System Environment/Daemons
-Requires: %{name}-plugin-common = %{version}-%{release}, %{name}-plugin-rack = %{version}-%{release}
-
-%description -n %{name}-plugin-fiber
-This package contains the fiber plugin for uWSGI
-
 %package -n %{name}-plugin-gccgo
 Summary:  uWSGI - Plugin for GoLang support
 Group:    System Environment/Daemons
@@ -748,14 +639,6 @@ Requires: python%{python3_pkgversion}, %{name}-plugin-common = %{version}-%{rele
 
 %description -n %{name}-plugin-python3
 This package contains the Python 3 plugin for uWSGI
-
-%package -n %{name}-plugin-rack
-Summary:  uWSGI - Ruby rack plugin
-Group:    System Environment/Daemons
-Requires: rubygem-rack, %{name}-plugin-common = %{version}-%{release}
-
-%description -n %{name}-plugin-rack
-This package contains the rack plugin for uWSGI
 
 %package -n %{name}-plugin-rbthreads
 Summary:  uWSGI - Ruby native threads support plugin
@@ -1217,14 +1100,10 @@ echo "https://github.com/unbit/%{docrepo}/tree/%{commit}" >> README.Fedora
 %{__install} -p -m 0644 *.h %{buildroot}%{_includedir}/%{name}
 %{__install} -p -m 0755 *_plugin.so %{buildroot}%{_libdir}/%{name}
 %{__install} -D -p -m 0644 uwsgidecorators.py %{buildroot}%{python_sitelib}/uwsgidecorators.py
-%if %{manual_py_compile} == 1
-%py_byte_compile %{__python} %{buildroot}%{python_sitelib}/
-%endif
+find %{buildroot}%{python_sitelib} -type f -a -name "*.py" -print0 | xargs -0 %{__python} -c 'import py_compile, sys; [py_compile.compile(f, dfile=f.partition("$RPM_BUILD_ROOT")[2]) for f in sys.argv[1:]]' || :
+find %{buildroot}%{python_sitelib} -type f -a -name "*.py" -print0 | xargs -0 %{__python} -O -c 'import py_compile, sys; [py_compile.compile(f, dfile=f.partition("$RPM_BUILD_ROOT")[2]) for f in sys.argv[1:]]' || :
 %if %{with python3}
 %{__install} -D -p -m 0644 uwsgidecorators.py %{buildroot}%{python3_sitelib}/uwsgidecorators.py
-%if %{manual_py_compile} == 1
-%py_byte_compile %{__python3} %{buildroot}%{python3_sitelib}/
-%endif
 %endif
 %if %{with java}
 %{__install} -p -m 0644 plugins/jvm/%{name}.jar %{buildroot}%{_javadir}
@@ -1364,9 +1243,6 @@ fi
 %files -n %{name}-alarm-curl
 %{_libdir}/%{name}/alarm_curl_plugin.so
 
-%files -n %{name}-alarm-xmpp
-%{_libdir}/%{name}/alarm_xmpp_plugin.so
-
 # Transformations
 
 %files -n %{name}-transformation-chunked
@@ -1467,11 +1343,6 @@ fi
 %files -n %{name}-plugin-dummy
 %{_libdir}/%{name}/dummy_plugin.so
 
-%if %{with ruby19}
-%files -n %{name}-plugin-fiber
-%{_libdir}/%{name}/fiber_plugin.so
-%endif
-
 %if %{with go}
 %files -n %{name}-plugin-gccgo
 %{_libdir}/%{name}/gccgo_plugin.so
@@ -1547,9 +1418,6 @@ fi
 %files -n %{name}-plugin-python3
 %{_libdir}/%{name}/python3_plugin.so
 %endif
-
-%files -n %{name}-plugin-rack
-%{_libdir}/%{name}/rack_plugin.so
 
 %if %{with ruby19}
 %files -n %{name}-plugin-rbthreads
@@ -1681,6 +1549,9 @@ fi
 
 
 %changelog
+* Tue Apr 18 2017 Tristan Cacqueray <tdecacqu@redhat.com> - 2.%{minornumber}.%{releasenumber}-4
+- Drop gloox, rack and py34 compatibility
+
 * Fri Jan 13 2017 Jorge A Gallegos <kad@blegh.net> - 2.0.14-6
 - Adding the cheaper_busyness plugin (Jorge Gallegos)
 - Got tired of this giant string (Jorge Gallegos)
